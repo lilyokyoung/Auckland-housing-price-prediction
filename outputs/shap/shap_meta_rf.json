@@ -1,0 +1,67 @@
+{
+  "model_path": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\models\\avms\\rf_final_model\\rf_final_model.joblib",
+  "data_path": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\data\\preprocessed\\avms\\final_for_AVMs.csv",
+  "rows_used": 399,
+  "n_features": 45,
+  "target_col_detected": "log_Median_Price",
+  "id_cols_detected": [
+    "Month",
+    "District"
+  ],
+  "expected_inputs_found": true,
+  "expected_inputs_n": 39,
+  "is_pipeline": true,
+  "outputs": {
+    "summary_plot": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\shap\\shap_summary_rf.png",
+    "importance_csv": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\shap\\shap_importance_rf.csv",
+    "shap_values_wide_features_only": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\shap\\shap_values_rf.parquet",
+    "shap_by_row_wide": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\shap\\shap_by_row_rf.parquet",
+    "shap_long": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\shap\\shap_long_rf.parquet"
+  },
+  "top_features": [
+    {
+      "feature": "num__weeklyrent",
+      "mean_abs_shap": 0.02244497909345509
+    },
+    {
+      "feature": "num__log_sales_count_lag12",
+      "mean_abs_shap": 0.02081589552050897
+    },
+    {
+      "feature": "num__log_sales_count_lag9",
+      "mean_abs_shap": 0.01674352319648383
+    },
+    {
+      "feature": "num__log_sales_count_lag6",
+      "mean_abs_shap": 0.01356655670374925
+    },
+    {
+      "feature": "num__log_sales_count_lag1",
+      "mean_abs_shap": 0.012247166629801642
+    },
+    {
+      "feature": "num__log_sales_count_lag3",
+      "mean_abs_shap": 0.011978326866164254
+    },
+    {
+      "feature": "num__log_sales_count",
+      "mean_abs_shap": 0.011766018277956931
+    },
+    {
+      "feature": "cat__District_NorthShore",
+      "mean_abs_shap": 0.011641423939272555
+    },
+    {
+      "feature": "cat__District_Waitakere",
+      "mean_abs_shap": 0.009448852047265258
+    },
+    {
+      "feature": "num__RealMortgageRate",
+      "mean_abs_shap": 0.009001314945143672
+    }
+  ],
+  "notes": {
+    "long_format_usage": "Filter by District/Scenario/Month, then aggregate per feature: mean(shap_value) and mean(abs_shap) to get ranked drivers.",
+    "month_format": "If Month column exists, it is normalized to 'YYYY-MM' when parseable."
+  }
+}

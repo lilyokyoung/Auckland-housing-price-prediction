@@ -1,0 +1,11 @@
+SVR training summary (TRAIN ONLY)
+==================================================
+Best CV RMSE: 0.1263
+Train RMSE (in-sample): 0.0434
+Train MAE  (in-sample): 0.0351
+Train R^2  (in-sample): 0.946399
+
+Rows used after dropping NA lags: 357
+Train month range: 2019-09-01 00:00:00  ->  2023-12-01 00:00:00
+
+Best params: {'svr__C': 1.0, 'svr__epsilon': 0.05, 'svr__gamma': 0.01, 'svr__kernel': 'rbf'}

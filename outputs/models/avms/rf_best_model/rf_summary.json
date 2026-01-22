@@ -1,0 +1,23 @@
+{
+  "best_score_cv_neg_rmse": -0.09793314933093498,
+  "best_rmse_cv": 0.09793314933093498,
+  "best_params": {
+    "rf__max_depth": 20,
+    "rf__max_features": "sqrt",
+    "rf__min_samples_leaf": 1,
+    "rf__min_samples_split": 2,
+    "rf__n_estimators": 600
+  },
+  "train_in_sample_metrics": {
+    "RMSE": 0.02191619049778172,
+    "MAE": 0.01714304373178779,
+    "R2": 0.9863400619540041
+  },
+  "rows_used_after_dropna": 357,
+  "train_month_min": "2019-09-01 00:00:00",
+  "train_month_max": "2023-12-01 00:00:00",
+  "scoring": "neg_root_mean_squared_error",
+  "n_splits": 5,
+  "min_train_months": 24,
+  "val_months_per_split": 6
+}

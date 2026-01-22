@@ -1,0 +1,9 @@
+MLR vs AVMs — TEST metrics (sorted by RMSE_NZD)
+================================================
+
+Primary metrics: NZD (after exp back-transform from log target).
+
+RandomForest: RMSE_NZD=109045, MAE_NZD=88817, R2_NZD=0.538 | RMSE_log=0.1110, MAE_log=0.0902, R2_log=0.532
+SVR: RMSE_NZD=145993, MAE_NZD=125244, R2_NZD=0.172 | RMSE_log=0.1512, MAE_log=0.1276, R2_log=0.131
+XGBoost: RMSE_NZD=153071, MAE_NZD=125701, R2_NZD=0.090 | RMSE_log=0.1505, MAE_log=0.1233, R2_log=0.139
+MLR_baseline: RMSE_NZD=307324, MAE_NZD=298202, R2_NZD=-2.668 | RMSE_log=0.2739, MAE_log=0.2671, R2_log=-1.852

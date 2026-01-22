@@ -1,0 +1,112 @@
+{
+  "model_path": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\models\\avms\\rf_final_model\\rf_final_model.joblib",
+  "data_path": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\shap_forecast\\_aligned_low.parquet",
+  "rows_used": 84,
+  "n_features": 45,
+  "target_col_detected": null,
+  "id_cols_detected": [
+    "Month",
+    "District",
+    "Scenario"
+  ],
+  "expected_inputs_override": [
+    "District",
+    "OCR",
+    "CGPI_Dwelling",
+    "Net_migration_monthly",
+    "weeklyrent",
+    "unemployment_rate",
+    "RealMortgageRate",
+    "log_sales_count",
+    "log_Consents",
+    "log_sales_count_lag1",
+    "log_sales_count_lag3",
+    "log_sales_count_lag6",
+    "log_sales_count_lag9",
+    "log_sales_count_lag12",
+    "OCR_lag1",
+    "OCR_lag3",
+    "OCR_lag6",
+    "OCR_lag9",
+    "OCR_lag12",
+    "CGPI_Dwelling_lag1",
+    "CGPI_Dwelling_lag3",
+    "CGPI_Dwelling_lag6",
+    "CGPI_Dwelling_lag9",
+    "CGPI_Dwelling_lag12",
+    "log_Consents_lag1",
+    "log_Consents_lag3",
+    "log_Consents_lag6",
+    "log_Consents_lag9",
+    "log_Consents_lag12",
+    "unemployment_rate_lag1",
+    "unemployment_rate_lag3",
+    "unemployment_rate_lag6",
+    "unemployment_rate_lag9",
+    "unemployment_rate_lag12",
+    "RealMortgageRate_lag1",
+    "RealMortgageRate_lag3",
+    "RealMortgageRate_lag6",
+    "RealMortgageRate_lag9",
+    "RealMortgageRate_lag12"
+  ],
+  "expected_inputs_found": true,
+  "expected_inputs_n": 39,
+  "is_pipeline": true,
+  "base_value": 13.816489394062874,
+  "outputs": {
+    "summary_plot": null,
+    "importance_csv": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\shap_forecast\\low\\shap_importance_rf.csv",
+    "shap_values_wide_features_only": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\shap_forecast\\low\\shap_values_rf.parquet",
+    "shap_by_row_wide": null,
+    "shap_long": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\shap_forecast\\low\\shap_long_rf.parquet",
+    "shap_long_csv": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\shap_forecast\\low\\shap_long_rf.csv"
+  },
+  "top_features": [
+    {
+      "feature": "num__weeklyrent",
+      "mean_abs_shap": 0.020059479647852544
+    },
+    {
+      "feature": "num__RealMortgageRate",
+      "mean_abs_shap": 0.018111806114197448
+    },
+    {
+      "feature": "cat__District_NorthShore",
+      "mean_abs_shap": 0.013476495124154518
+    },
+    {
+      "feature": "num__log_sales_count",
+      "mean_abs_shap": 0.013348004331432623
+    },
+    {
+      "feature": "num__log_sales_count_lag1",
+      "mean_abs_shap": 0.013041172414525869
+    },
+    {
+      "feature": "num__RealMortgageRate_lag1",
+      "mean_abs_shap": 0.011361003337418725
+    },
+    {
+      "feature": "num__log_sales_count_lag3",
+      "mean_abs_shap": 0.01059114256113242
+    },
+    {
+      "feature": "cat__District_Waitakere",
+      "mean_abs_shap": 0.01025570344903799
+    },
+    {
+      "feature": "num__log_sales_count_lag6",
+      "mean_abs_shap": 0.009866062937009678
+    },
+    {
+      "feature": "num__log_sales_count_lag9",
+      "mean_abs_shap": 0.008675154926291095
+    }
+  ],
+  "notes": {
+    "long_format_usage": "Filter by District/Scenario/Month, then aggregate per feature: mean(shap_value) and mean(abs_shap) to get ranked drivers.",
+    "month_format": "If Month exists, it is normalized to 'YYYY-MM'.",
+    "pred_definition": "pred_log = base_value + sum(shap_value over all features)."
+  }
+}

@@ -1,0 +1,9 @@
+MLR vs AVMs — TRAIN metrics (in-sample; sorted by RMSE_NZD)
+===========================================================
+
+Note: Train metrics are in-sample diagnostics (will be better than TEST).
+
+XGBoost: RMSE_NZD=11931, MAE_NZD=9166, R2_NZD=0.996 | RMSE_log=0.0114, MAE_log=0.0089, R2_log=0.996
+RandomForest: RMSE_NZD=23387, MAE_NZD=17813, R2_NZD=0.985 | RMSE_log=0.0219, MAE_log=0.0171, R2_log=0.986
+SVR: RMSE_NZD=45078, MAE_NZD=35901, R2_NZD=0.944 | RMSE_log=0.0434, MAE_log=0.0351, R2_log=0.946
+MLR_baseline: RMSE_NZD=67329, MAE_NZD=52511, R2_NZD=0.875 | RMSE_log=0.0647, MAE_log=0.0512, R2_log=0.881

@@ -1,0 +1,11 @@
+Random Forest training summary (TRAIN ONLY)
+==================================================
+Best CV RMSE: 0.0979
+Train RMSE (in-sample): 0.0219
+Train MAE  (in-sample): 0.0171
+Train R^2  (in-sample): 0.986340
+
+Rows used after dropping NA lags: 357
+Train month range: 2019-09-01 00:00:00  ->  2023-12-01 00:00:00
+
+Best params: {'rf__max_depth': 20, 'rf__max_features': 'sqrt', 'rf__min_samples_leaf': 1, 'rf__min_samples_split': 2, 'rf__n_estimators': 600}

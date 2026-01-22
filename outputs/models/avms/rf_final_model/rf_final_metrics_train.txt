@@ -1,0 +1,6 @@
+RandomForest retrain on FINAL dataset (train_for_AVMs + test_for_AVMs)
+===============================================================
+Rows used: 399
+
+RMSE_NZD=23998, MAE_NZD=18296, R2_NZD=0.9837
+RMSE_log=0.0226, MAE_log=0.0177, R2_log=0.9852

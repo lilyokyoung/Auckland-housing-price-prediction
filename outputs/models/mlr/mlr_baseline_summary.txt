@@ -1,0 +1,48 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:       log_Median_Price   R-squared:                       0.881
+Model:                            OLS   Adj. R-squared:                  0.873
+Method:                 Least Squares   F-statistic:                     112.2
+Date:                Tue, 06 Jan 2026   Prob (F-statistic):          1.01e-139
+Time:                        15:57:00   Log-Likelihood:                 470.66
+No. Observations:                 357   AIC:                            -895.3
+Df Residuals:                     334   BIC:                            -806.1
+Df Model:                          22                                         
+Covariance Type:            nonrobust                                         
+==========================================================================================
+                             coef    std err          t      P>|t|      [0.025      0.975]
+------------------------------------------------------------------------------------------
+const                     11.3553      0.179     63.385      0.000      11.003      11.708
+weeklyrent                 0.0036      0.000     24.686      0.000       0.003       0.004
+CGPI_Dwelling_lag1         0.0028      0.001      5.136      0.000       0.002       0.004
+OCR_lag1                  -0.0801      0.017     -4.732      0.000      -0.113      -0.047
+CGPI_Dwelling_lag9        -0.0025      0.001     -3.778      0.000      -0.004      -0.001
+unemployment_rate_lag6     0.1366      0.045      3.040      0.003       0.048       0.225
+log_sales_count            0.0783      0.012      6.485      0.000       0.055       0.102
+unemployment_rate_lag9    -0.2127      0.047     -4.554      0.000      -0.305      -0.121
+unemployment_rate_lag1    -0.1153      0.050     -2.297      0.022      -0.214      -0.017
+log_sales_count_lag1       0.0505      0.012      4.131      0.000       0.026       0.075
+log_sales_count_lag12      0.0378      0.012      3.059      0.002       0.014       0.062
+unemployment_rate_lag3     0.0855      0.054      1.576      0.116      -0.021       0.192
+log_Consents_lag1         -0.0332      0.012     -2.770      0.006      -0.057      -0.010
+log_Consents_lag9         -0.0229      0.011     -2.108      0.036      -0.044      -0.002
+log_sales_count_lag3       0.0262      0.012      2.251      0.025       0.003       0.049
+log_sales_count_lag9       0.0237      0.011      2.132      0.034       0.002       0.046
+log_Consents              -0.0168      0.012     -1.392      0.165      -0.041       0.007
+OCR_lag12                  0.0422      0.012      3.650      0.000       0.019       0.065
+Net_migration_monthly   2.262e-05   9.62e-06      2.351      0.019    3.69e-06    4.15e-05
+log_Consents_lag6         -0.0068      0.011     -0.614      0.540      -0.029       0.015
+log_Consents_lag3         -0.0114      0.012     -0.977      0.329      -0.034       0.012
+log_sales_count_lag6      -0.0103      0.011     -0.909      0.364      -0.033       0.012
+log_Consents_lag12        -0.0064      0.011     -0.577      0.564      -0.028       0.015
+==============================================================================
+Omnibus:                        5.473   Durbin-Watson:                   2.309
+Prob(Omnibus):                  0.065   Jarque-Bera (JB):                5.316
+Skew:                          -0.247   Prob(JB):                       0.0701
+Kurtosis:                       3.335   Cond. No.                     7.10e+04
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+[2] The condition number is large, 7.1e+04. This might indicate that there are
+strong multicollinearity or other numerical problems.

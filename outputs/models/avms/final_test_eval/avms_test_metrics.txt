@@ -1,0 +1,9 @@
+AVMs final evaluation on TEST (test_for_AVMs)
+============================================
+
+Primary metrics are in NZD (after exp back-transform).
+Lower RMSE_NZD is better.
+
+RandomForest: RMSE_NZD=109045, MAE_NZD=88817, R2_NZD=0.5383 | RMSE_log=0.1110, MAE_log=0.0902, R2_log=0.5318
+SVR: RMSE_NZD=145993, MAE_NZD=125244, R2_NZD=0.1723 | RMSE_log=0.1512, MAE_log=0.1276, R2_log=0.1312
+XGBoost: RMSE_NZD=153071, MAE_NZD=125701, R2_NZD=0.0901 | RMSE_log=0.1505, MAE_log=0.1233, R2_log=0.1388

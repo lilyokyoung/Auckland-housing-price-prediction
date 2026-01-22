@@ -1,0 +1,86 @@
+{
+  "time_span": "2018-08 to 2025-06",
+  "notes": {
+    "normalize_index": true,
+    "interpretation": "Spatial context (region vs districts). Descriptive only; not used for training."
+  },
+  "top_3_premium_vs_region": [
+    {
+      "district": "NorthShore",
+      "avg_ratio_to_region": 1.1814812704304072
+    },
+    {
+      "district": "AucklandCity",
+      "avg_ratio_to_region": 1.1296894024114055
+    },
+    {
+      "district": "Rodney",
+      "avg_ratio_to_region": 1.072289041343061
+    }
+  ],
+  "top_3_volatility": [
+    {
+      "district": "AucklandCity",
+      "volatility_log_return_std": 0.07941100963960876
+    },
+    {
+      "district": "NorthShore",
+      "volatility_log_return_std": 0.06451499271217341
+    },
+    {
+      "district": "Franklin",
+      "volatility_log_return_std": 0.0639251582587592
+    }
+  ],
+  "district_metrics": [
+    {
+      "district": "AucklandCity",
+      "avg_ratio_to_region": 1.1296894024114055,
+      "median_ratio_to_region": 1.1306765523632993,
+      "volatility_log_return_std": 0.07941100963960876,
+      "corr_with_region_log_return": 0.7489289780088576
+    },
+    {
+      "district": "Franklin",
+      "avg_ratio_to_region": 0.8136961207333022,
+      "median_ratio_to_region": 0.8087367178276269,
+      "volatility_log_return_std": 0.0639251582587592,
+      "corr_with_region_log_return": 0.2860209021079123
+    },
+    {
+      "district": "Manukau",
+      "avg_ratio_to_region": 0.9546711952004363,
+      "median_ratio_to_region": 0.9473684210526315,
+      "volatility_log_return_std": 0.04480399463278024,
+      "corr_with_region_log_return": 0.5066901578150802
+    },
+    {
+      "district": "NorthShore",
+      "avg_ratio_to_region": 1.1814812704304072,
+      "median_ratio_to_region": 1.1759656652360515,
+      "volatility_log_return_std": 0.06451499271217341,
+      "corr_with_region_log_return": 0.41281549785610944
+    },
+    {
+      "district": "Papakura",
+      "avg_ratio_to_region": 0.8004518184139184,
+      "median_ratio_to_region": 0.7982494529540481,
+      "volatility_log_return_std": 0.05782472517213838,
+      "corr_with_region_log_return": 0.08830364356788928
+    },
+    {
+      "district": "Rodney",
+      "avg_ratio_to_region": 1.072289041343061,
+      "median_ratio_to_region": 1.0727272727272728,
+      "volatility_log_return_std": 0.05709938160448095,
+      "corr_with_region_log_return": 0.3640863908274195
+    },
+    {
+      "district": "Waitakere",
+      "avg_ratio_to_region": 0.9037982481220207,
+      "median_ratio_to_region": 0.9033613445378151,
+      "volatility_log_return_std": 0.04273616693133593,
+      "corr_with_region_log_return": 0.550151717681145
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "model_path": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\models\\avms\\rf_final_model\\rf_final_model.joblib",
+  "inputs": {
+    "future_base_path": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\data\\forecast\\future datasets\\future_for_AVMs_base.csv",
+    "future_low_path": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\data\\forecast\\future datasets\\future_for_AVMs_low.csv",
+    "future_high_path": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\data\\forecast\\future datasets\\future_for_AVMs_high.csv"
+  },
+  "rows_per_scenario": 2000,
+  "rows_used_total": 252,
+  "n_features_after_transform": 45,
+  "is_pipeline": true,
+  "output_csv": "C:\\Users\\Lily0708\\Final_project\\Auckland-housing-price-prediction\\outputs\\shap\\forecast_shap_long.csv"
+}

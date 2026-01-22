@@ -1,0 +1,2 @@
+﻿CV_RMSE(best),Train_RMSE(in_sample),Train_MAE(in_sample),Train_R2(in_sample),rows_used_after_dropna,train_month_min,train_month_max,best_params
+0.08719207481188582,0.011449116371234528,0.008938404412688165,0.9962721147510997,357,2019-09-01 00:00:00,2023-12-01 00:00:00,"{'xgb__colsample_bytree': 0.8, 'xgb__learning_rate': 0.03, 'xgb__max_depth': 3, 'xgb__n_estimators': 800, 'xgb__reg_alpha': 0.0, 'xgb__reg_lambda': 1.0, 'xgb__subsample': 0.8}"

@@ -1,0 +1,11 @@
+XGBoost training summary (TRAIN ONLY)
+==================================================
+Best CV RMSE: 0.0872
+Train RMSE (in-sample): 0.0114
+Train MAE  (in-sample): 0.0089
+Train R^2  (in-sample): 0.996272
+
+Rows used after dropping NA lags: 357
+Train month range: 2019-09-01 00:00:00  ->  2023-12-01 00:00:00
+
+Best params: {'xgb__colsample_bytree': 0.8, 'xgb__learning_rate': 0.03, 'xgb__max_depth': 3, 'xgb__n_estimators': 800, 'xgb__reg_alpha': 0.0, 'xgb__reg_lambda': 1.0, 'xgb__subsample': 0.8}

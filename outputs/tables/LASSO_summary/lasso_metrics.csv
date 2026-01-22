@@ -1,0 +1,2 @@
+best_alpha,tscv_rmse_mean,tscv_rmse_std,n_splits,n_rows_used,n_features
+0.0002785300576075621,0.11768026805794925,0.04737262179330046,5,357,32
