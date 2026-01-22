@@ -287,13 +287,18 @@ try:
     # ============================================================
     # Auto methodology narration
     # ============================================================
-    st.markdown("### 🧠 Auto methodology narration")
+    st.markdown("### 🧠 Automated modelling methodology summary")
+    st.caption(
+    "AI-generated narrative that summarises the modelling pipeline and evaluation results "
+    "to support reproducibility and reporting."
+    )
 
     col_btn, col_src = st.columns([0.25, 0.75], vertical_alignment="center")
     with col_btn:
         refresh = st.button("Refresh narration", use_container_width=True)
     with col_src:
-        st.caption(f"Source: `{api_base}/api/narratives`")
+        if show_debug:
+           st.caption(f"Source: `{api_base}/api/narratives`")
 
     if refresh:
         st.cache_data.clear()
