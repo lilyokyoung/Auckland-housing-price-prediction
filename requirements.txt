@@ -8,3 +8,4 @@
 #matplotlib
 streamlit==1.36.0
 altair==4.2.2
+plotly==5.24.1
