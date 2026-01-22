@@ -1,5 +1,6 @@
 # pages/9_AI_Agent_Optional.py
 from __future__ import annotations
+import os
 
 import sys
 import re
@@ -31,7 +32,7 @@ st.caption("Chat with your AVM agent (narrative, metrics, SHAP, investment insig
 # ============================================================
 # Global shared state
 # ============================================================
-DEFAULT_API_BASE = "http://127.0.0.1:8000"
+DEFAULT_API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8000")
 if "api_base" not in st.session_state:
     st.session_state["api_base"] = DEFAULT_API_BASE
 if "district" not in st.session_state:
