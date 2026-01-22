@@ -119,7 +119,7 @@ with st.sidebar:
             st.error(f"Could not reach API: {type(e).__name__}: {e}")
 
     st.button("Test agent connection", use_container_width=True, on_click=_test_connection)
-
+  
 
 # ============================================================
 # Formatting helpers
@@ -206,30 +206,51 @@ DEFAULT_INVESTMENT_SOURCE = str((PROJECT_ROOT / "outputs" / "investment" / "metr
 
 
 def _is_path_like(x: Any) -> bool:
+    """Return True only for safe, local file-like paths (not URLs)."""
     if x is None:
         return False
-    if isinstance(x, (str, Path)):
-        s = str(x).strip()
-        return len(s) > 0
+    if isinstance(x, Path):
+        return True
+    if isinstance(x, str):
+        s = x.strip()
+        if not s:
+            return False
+        # reject URLs
+        if s.lower().startswith(("http://", "https://")):
+            return False
+        return True
     return False
 
 
 def _resolve_source_path(source: Any) -> Optional[Path]:
     """
     Resolve 'source' to a readable local file Path.
-    - If backend returns an absolute windows path: use it.
-    - If backend returns a relative path like outputs/investment/metrics_by_district.csv: resolve under PROJECT_ROOT.
-    - If source is missing: use default.
+    Security/robustness:
+    - Reject URLs
+    - If absolute path is outside PROJECT_ROOT, ignore it (use default)
     """
     if not _is_path_like(source):
         source = DEFAULT_INVESTMENT_SOURCE
 
     s = str(source).strip().strip('"').strip("'")
+
+    # if still looks like URL, ignore
+    if s.lower().startswith(("http://", "https://")):
+        s = DEFAULT_INVESTMENT_SOURCE
+
     p = Path(s)
 
-    # If it's relative, resolve from PROJECT_ROOT
+    # If relative, resolve under PROJECT_ROOT
     if not p.is_absolute():
         p = (PROJECT_ROOT / p).resolve()
+    else:
+        # If absolute but NOT under PROJECT_ROOT, treat as unsafe and fallback
+        try:
+            proj = str(PROJECT_ROOT.resolve())
+            if not str(p).startswith(proj):
+                p = Path(DEFAULT_INVESTMENT_SOURCE)
+        except Exception:
+            p = Path(DEFAULT_INVESTMENT_SOURCE)
 
     return p
 
@@ -238,9 +259,19 @@ def _load_metrics_from_source_path(source: Any) -> pd.DataFrame:
     """
     Load metrics_by_district.csv into a standardised DataFrame.
     Returns empty df if file doesn't exist or cannot be read.
+    IMPORTANT: Never crash the whole page due to PermissionError.
     """
     p = _resolve_source_path(source)
-    if p is None or not p.exists() or not p.is_file():
+    if p is None:
+        return pd.DataFrame()
+
+    # ✅ SAFE exists/is_file checks (avoid PermissionError crashing app)
+    try:
+        if (not p.exists()) or (not p.is_file()):
+            return pd.DataFrame()
+    except PermissionError:
+        return pd.DataFrame()
+    except OSError:
         return pd.DataFrame()
 
     try:
@@ -258,48 +289,41 @@ def _load_metrics_from_source_path(source: Any) -> pd.DataFrame:
 
     # Map your actual csv columns -> UI columns
     rename_map = {
-        # district
         "District": "district",
         "district_name": "district",
         "name": "district",
-        # return
         "expected_return_base": "base_return",
-        "expected_return_base_pct": "base_return",  # if already in pct, we'll fix below
+        "expected_return_base_pct": "base_return",
         "return": "base_return",
         "baseExpectedReturn": "base_return",
         "base_expected_return": "base_return",
-        # volatility
         "expected_volatility_base": "volatility",
         "volatility_base": "volatility",
         "vol": "volatility",
         "risk": "volatility",
-        # drawdown
         "downside_max_drawdown_low": "low_scenario_drawdown",
         "downside_max_drawdown_low_pct": "low_scenario_drawdown",
         "drawdown": "low_scenario_drawdown",
         "low_drawdown": "low_scenario_drawdown",
-        # spread
         "scenario_spread_high_minus_low": "scenario_spread",
         "spread": "scenario_spread",
-        # score
         "stability_score": "stability_score",
         "stability": "stability_score",
         "score": "stability_score",
     }
     df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
-    
+
     df = _coalesce_duplicate_columns(df)
 
     # If base_return came from *_pct column, it might be 3.04 not 0.0304. Detect and convert to ratio.
     if "base_return" in df.columns:
         br = pd.to_numeric(df["base_return"], errors="coerce")
-        # heuristic: if median is > 0.5, treat as percent value and divide by 100
         if br.notna().any() and br.median(skipna=True) > 0.5:
             df["base_return"] = br / 100.0
         else:
             df["base_return"] = br
 
-    # If drawdown came from *_pct column, it might be -0.01 not -0.0001. Detect similarly.
+    # If drawdown came from *_pct column, it might be -7.38 not -0.0738. Detect similarly.
     if "low_scenario_drawdown" in df.columns:
         dd = pd.to_numeric(df["low_scenario_drawdown"], errors="coerce")
         if dd.notna().any() and dd.abs().median(skipna=True) > 0.5:
@@ -311,17 +335,16 @@ def _load_metrics_from_source_path(source: Any) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Keep only what we need (but allow missing columns gracefully)
     keep = [c for c in _EXPECTED_METRIC_COLS if c in df.columns]
     if keep:
         df = df[keep].copy()
 
-    # Drop rows with missing district
     if "district" in df.columns:
         df["district"] = df["district"].astype(str).str.strip()
         df = df[df["district"].astype(bool)]
 
     return df.reset_index(drop=True)
+
 
 
 def _coerce_metrics_df(meta: Dict[str, Any]) -> pd.DataFrame:
