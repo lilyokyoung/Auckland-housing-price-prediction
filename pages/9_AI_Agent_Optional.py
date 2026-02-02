@@ -173,6 +173,42 @@ def _emoji_for_district(name: str) -> str:
         return "🏡"
     return "📍"
 
+# Compare intent helpers 
+# ============================================================
+
+KNOWN_DISTRICTS = [
+    "Auckland City",
+    "Franklin",
+    "Manukau",
+    "North Shore",
+    "Papakura",
+    "Rodney",
+    "Waitakere",
+]
+
+def _extract_districts_from_text(text: str) -> List[str]:
+    if not text:
+        return []
+
+    t = text.lower()
+    found = []
+
+    for d in KNOWN_DISTRICTS:
+        key = d.lower()
+        key_compact = key.replace(" ", "")
+        if key in t or key_compact in t.replace(" ", ""):
+            found.append(d)
+
+    seen = set()
+    out = []
+    for d in found:
+        if d not in seen:
+            out.append(d)
+            seen.add(d)
+
+    return out
+
+
 def _coalesce_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     If df has duplicate column names, coalesce them into one column by taking
@@ -824,6 +860,27 @@ def post_agent(api_base: str, endpoint_path: str, user_query: str, context: Dict
     r.raise_for_status()
     return r.json()
 
+def post_forecast_agent(
+    api_base: str,
+    user_query: str,
+    context: Dict[str, Any],
+    timeout: int
+) -> Dict[str, Any]:
+    url = f"{api_base.rstrip('/')}/api/forecast_agent"
+
+    payload = {
+        "user_query": user_query,
+        "district": context.get("district"),
+        "scenario": context.get("scenario"),
+        "month": context.get("month"),
+        "top_k": context.get("top_k"),
+        "tone": context.get("tone"),
+        "include_profiles": context.get("include_profiles"),
+    }
+
+    r = requests.post(url, json=payload, timeout=timeout)
+    r.raise_for_status()
+    return r.json()
 
 # ============================================================
 # Context defaults (auto-inject from app state)
@@ -871,16 +928,42 @@ if user_text:
     st.session_state["agent_messages"].append({"role": "user", "content": user_text})
 
     ctx = build_default_context()
+    picked = _extract_districts_from_text(user_text)
 
     try:
-        resp_json = post_agent(
-            api_base=st.session_state["api_base"],
-            endpoint_path=endpoint,
-            user_query=user_text,
-            context=ctx,
-            timeout=int(timeout_s),
-        )
-        st.session_state["agent_messages"].append({"role": "assistant", "content": "", "raw": resp_json})
+        # ✅ If compare-like query with >=2 districts: call forecast_agent per district
+        if len(picked) >= 2:
+            for d in picked:
+                ctx_one = dict(ctx)
+                ctx_one["district"] = d
+                resp_json = post_forecast_agent(
+                    api_base=st.session_state["api_base"],
+                    user_query=user_text,
+                    context=ctx_one,
+                    timeout=int(timeout_s),
+                )
+
+                # ✅ 手动注入 mode，让前端识别
+                wrapped = {
+                    "mode": "forecast_agent",
+                    "result": resp_json
+                }
+
+                st.session_state["agent_messages"].append(
+                    {"role": "assistant", "content": "", "raw": wrapped}
+                )
+
+        else:
+            # default: normal /api/agent
+            resp_json = post_agent(
+                api_base=st.session_state["api_base"],
+                endpoint_path=endpoint,
+                user_query=user_text,
+                context=ctx,
+                timeout=int(timeout_s),
+            )
+            st.session_state["agent_messages"].append({"role": "assistant", "content": "", "raw": resp_json})
+
 
     except requests.HTTPError as e:
         err_text = ""
