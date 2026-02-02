@@ -1,6 +1,7 @@
 # pages/3_Modelling_&_Evaluation.py
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -249,17 +250,29 @@ def _fetch_narratives(api_base_in: str) -> Dict[str, Any]:
     Always returns a dict. If failed, returns {"_ok": False, "_error": "..."}.
     """
     url = api_base_in.rstrip("/") + "/api/narratives"
+
     try:
         r = requests.get(url, timeout=30)
         r.raise_for_status()
         data = r.json()
+
         if isinstance(data, dict):
             data["_ok"] = True
-            data["_url"] = url
+            data["_endpoint"] = "narratives"
             return data
-        return {"_ok": False, "_url": url, "_error": f"Unexpected JSON type: {type(data)}"}
+
+        return {
+            "_ok": False,
+            "_endpoint": "narratives",
+            "_error": f"Unexpected JSON type: {type(data)}"
+        }
+
     except Exception as e:
-        return {"_ok": False, "_url": url, "_error": f"{type(e).__name__}: {e}"}
+        return {
+            "_ok": False,
+            "_endpoint": "narratives",
+            "_error": f"{type(e).__name__}: {e}"
+        }
 
 
 # ============================================================
@@ -274,7 +287,8 @@ try:
     st.caption("Compare candidate models using time-based evaluation and select the final AVM.")
     st.divider()
 
-    api_base = st.session_state.get("api_base", "http://127.0.0.1:8000")
+    # Prefer env var in deployed env; empty means "API disabled"
+    api_base = (st.session_state.get("api_base") or os.getenv("API_BASE", "")).strip()
 
     # Sidebar settings
     st.sidebar.markdown("### Settings")
@@ -303,7 +317,8 @@ try:
     if refresh:
         st.cache_data.clear()
 
-    narratives = _fetch_narratives(api_base)
+    narratives = {"_ok": False, "_error": "API disabled"} if not api_base else _fetch_narratives(api_base)
+
 
     if narratives.get("_ok") is True:
         left, right = st.columns(2)
@@ -324,8 +339,11 @@ try:
             with st.expander("Debug: narratives payload", expanded=False):
                 st.json(narratives)
     else:
-        st.info("Narratives API not available (this is OK). The rest of the page uses local CSVs.")
         if show_debug:
+            st.info(
+            "Narratives API not available (this is OK). "
+            "The rest of the page uses local CSVs."
+            )
             with st.expander("Debug: narratives fetch error", expanded=True):
                 st.json(narratives)
 
@@ -352,7 +370,7 @@ This project evaluates multiple model classes to benchmark predictive performanc
     # ============================================================
     st.markdown("### 2) Training and evaluation design")
 
-    ds_summary = _safe_get_dataset_summary(api_base)
+    ds_summary = _safe_get_dataset_summary(api_base) if api_base else None
     st.info(_infer_design_text(ds_summary))
 
     with st.expander("Show effective sample details (dataset summary)", expanded=False):
@@ -542,7 +560,8 @@ Proceed to **Forecast & Explanation** to run scenario forecasts and view SHAP-ba
 """
         )
 
-    st.caption(f"API Base: `{api_base}`")
+    if show_debug and api_base:
+        st.caption("API Base configured (hidden in production).")
 
 except Exception as e:
     st.error("This page crashed while rendering.")

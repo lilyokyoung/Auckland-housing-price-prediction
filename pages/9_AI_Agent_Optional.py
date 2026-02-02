@@ -51,41 +51,10 @@ if "agent_messages" not in st.session_state:
 # Sidebar controls
 # ============================================================
 with st.sidebar:
-    show_debug = st.toggle(
-        "Show debug panels",
-        value=False,
-        help="Show raw payloads for debugging.",
-    )
-
-    st.markdown("### Agent endpoint")
-    endpoint = st.selectbox(
-        " ",
-        options=["/api/agent", "/api/forecast_agent"],
-        index=0,
-        help="Use /api/agent for natural language chat. /api/forecast_agent is one-shot structured report.",
-        key="agent_endpoint_select",
-    )
-
-    timeout_s = st.slider(
-        "Timeout (seconds)",
-        min_value=30,
-        max_value=600,
-        value=int(st.session_state.get("agent_timeout", 300)),
-        step=10,
-    )
-    st.session_state["agent_timeout"] = int(timeout_s)
-
-    api_base_input = st.text_input(
-        "API Base",
-        value=st.session_state.get("api_base", DEFAULT_API_BASE),
-        help="Example: http://127.0.0.1:8000",
-    )
-    api_base = (api_base_input or st.session_state.get("api_base", DEFAULT_API_BASE) or "").strip()
-    st.session_state["api_base"] = api_base
-
-    st.caption(f"API Base: {api_base}")
-
-    st.markdown("### Investment controls (for /api/agent)")
+    # =========================
+    # (A) Demo controls (keep)
+    # =========================
+    st.markdown("### Investment controls")
     st.selectbox(
         "Tone",
         options=["cautious", "neutral", "confident"],
@@ -100,7 +69,7 @@ with st.sidebar:
         key="inv_profiles_toggle",
     )
     st.slider(
-        "Top-K districts (investment)",
+        "Top-K districts",
         min_value=1,
         max_value=10,
         value=3,
@@ -108,18 +77,60 @@ with st.sidebar:
         key="inv_top_k_slider",
     )
 
-    def _test_connection() -> None:
-        try:
-            r = requests.get(f"{api_base.rstrip('/')}/health", timeout=10)
-            if r.status_code == 200:
-                st.success("API reachable: /health OK")
-            else:
-                st.warning(f"API reachable but /health returned {r.status_code}")
-        except Exception as e:
-            st.error(f"Could not reach API: {type(e).__name__}: {e}")
+    # =========================
+    # (B) Debug toggle (optional)
+    # =========================
+    show_debug = st.toggle(
+        "Show debug panels",
+        value=False,
+        help="Show raw payloads for debugging.",
+        key="show_debug_panels_toggle",
+    )
 
-    st.button("Test agent connection", use_container_width=True, on_click=_test_connection)
-  
+    # Always define safe defaults (so code below never breaks)
+    endpoint = "/api/agent"
+    timeout_s = int(st.session_state.get("agent_timeout", 300))
+
+    # Keep api_base internal only (no UI exposure)
+    api_base = (st.session_state.get("api_base", DEFAULT_API_BASE) or "").strip()
+
+    # =========================
+    # (C) Debug-only controls (hide in demo)
+    # =========================
+    if show_debug:
+        st.markdown("---")
+        st.markdown("### Debug controls")
+
+        endpoint = st.selectbox(
+            "Agent endpoint",
+            options=["/api/agent", "/api/forecast_agent"],
+            index=0,
+            help="Use /api/agent for natural language chat. /api/forecast_agent is one-shot structured report.",
+            key="agent_endpoint_select",
+        )
+
+        timeout_s = st.slider(
+            "Timeout (seconds)",
+            min_value=30,
+            max_value=600,
+            value=int(st.session_state.get("agent_timeout", 300)),
+            step=10,
+            key="agent_timeout_slider",
+        )
+        st.session_state["agent_timeout"] = int(timeout_s)
+
+        def _test_connection() -> None:
+            try:
+                r = requests.get(f"{api_base.rstrip('/')}/health", timeout=10)
+                if r.status_code == 200:
+                    st.success("API reachable: /health OK")
+                else:
+                    st.warning(f"API reachable but /health returned {r.status_code}")
+            except Exception as e:
+                st.error(f"Could not reach API: {type(e).__name__}: {e}")
+
+        st.button("Test agent connection", use_container_width=True, on_click=_test_connection)
+
 
 # ============================================================
 # Formatting helpers
@@ -823,7 +834,6 @@ def build_default_context() -> Dict[str, Any]:
         "scenario": st.session_state.get("pred_scenario", "base"),
         "month": st.session_state.get("explain_month", "2026-06"),
         "top_k": 8,
-        "api_base": st.session_state.get("api_base", DEFAULT_API_BASE),
         "tone": st.session_state.get("inv_tone_select", "cautious"),
         "include_profiles": bool(st.session_state.get("inv_profiles_toggle", True)),
     }
@@ -868,7 +878,7 @@ if user_text:
             endpoint_path=endpoint,
             user_query=user_text,
             context=ctx,
-            timeout=int(st.session_state.get("agent_timeout", 300)),
+            timeout=int(timeout_s),
         )
         st.session_state["agent_messages"].append({"role": "assistant", "content": "", "raw": resp_json})
 
