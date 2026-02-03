@@ -7,6 +7,7 @@ from typing import Any, List, Optional, Dict
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 
@@ -46,6 +47,12 @@ HIST_CANDIDATES = [
     PROCESSED_DIR / "merged_dataset1.xlsx",
 ]
 
+# Auckland Region (overall) historical price – comparison only
+# ------------------------------------------------------------
+AUCKLAND_REGION_PRICE_CANDIDATES = [
+    DATA_DIR / "processed" /"housing_price" / "AucklandRegion_Price.csv",
+
+]
 SHAP_DIR = OUTPUT_DIR / "shap_forecast"
 SHAP_LONG_PATH = SHAP_DIR / "forecast_shap_long.csv"  # Month, District, Scenario, feature, shap_value
 
@@ -100,6 +107,40 @@ def _resolve_existing(paths: List[Path]) -> Optional[Path]:
         if p.exists():
             return p
     return None
+
+def _load_auckland_region_price(
+    candidates: list[Path],
+    month_col: str = "Month",
+    price_col: str = "Median_Price",
+) -> pd.DataFrame:
+    p = _resolve_existing(candidates)
+    if p is None:
+        return pd.DataFrame()
+
+    df = _read_table(p)
+
+    if month_col not in df.columns or price_col not in df.columns:
+        return pd.DataFrame()
+
+    # \
+    out = df[[month_col, price_col]].copy()
+    out[month_col] = _parse_month(out[month_col])   # ✅ 用你现成的月度标准化函数
+    out[price_col] = pd.to_numeric(out[price_col], errors="coerce")
+    out = out.dropna(subset=[month_col, price_col]).sort_values(month_col)
+
+    # 如果有 Area，再尝试过滤；只有过滤后非空才覆盖 out
+    if "Area" in df.columns:
+        area_s = df["Area"].astype(str).str.strip().str.lower()
+        mask = area_s.str.replace(" ", "", regex=False).eq("aucklandregion")
+        tmp = df.loc[mask, [month_col, price_col]].copy()
+        tmp[month_col] = _parse_month(tmp[month_col])
+        tmp[price_col] = pd.to_numeric(tmp[price_col], errors="coerce")
+        tmp = tmp.dropna(subset=[month_col, price_col]).sort_values(month_col)
+
+        if not tmp.empty:
+            out = tmp
+
+    return out
 
 
 # ============================================================
@@ -413,6 +454,8 @@ pred_plot["Series"] = "Forecast"
 plot_df = pd.concat([hist_plot, pred_plot], ignore_index=True)
 plot_df = plot_df.dropna(subset=["Month", "Value"]).sort_values("Month")
 
+st.caption(f"Selected forecast month: {sel_month_str}")
+
 fig = px.line(
     plot_df,
     x="Month",
@@ -426,7 +469,75 @@ fig.update_layout(
     xaxis_title="Month",
     yaxis_title="Median Price",
 )
+
+# ============================================================
+# ✅ Mark the selected month on the line chart
+# ============================================================
+
+
+# 2) marker at selected month (prefer Forecast; fallback to Historical)
+def _get_value_at_month(series_name: str) -> Optional[float]:
+    s = plot_df[(plot_df["Month"] == sel_month) & (plot_df["Series"] == series_name)]
+    if s.empty:
+        return None
+    v = s["Value"].iloc[-1]
+    return float(v) if pd.notna(v) else None
+
+y_forecast = _get_value_at_month("Forecast")
+y_hist = _get_value_at_month("Historical")
+y_mark = y_forecast if y_forecast is not None else y_hist
+
+if y_mark is not None:
+    fig.add_trace(
+        go.Scatter(
+            x=[sel_month],
+            y=[y_mark],
+            mode="markers",
+            text=None,
+            textposition="top center",
+            marker=dict(
+                size=6,                 
+                color="red",
+                symbol="circle",
+            ),
+            textfont=dict(size=11),
+            showlegend=False,
+            hovertemplate="Selected month: %{x}<br>Price: %{y:,.0f}<extra></extra>",
+            name="Selected month",
+        )
+    )
+
+df_region = _load_auckland_region_price(AUCKLAND_REGION_PRICE_CANDIDATES)
+
+if not df_region.empty:
+    # 
+    hist_end = pd.to_datetime(current_anchor_dt)  # 
+    df_region_plot = df_region[df_region["Month"] <= hist_end].copy()
+    
+    df_region = _load_auckland_region_price(AUCKLAND_REGION_PRICE_CANDIDATES)
+    
+
+    if not df_region.empty:
+        hist_end = current_anchor_dt  
+        df_region_plot = df_region[df_region["Month"] <= hist_end].copy()
+        
+
+
+    import plotly.graph_objects as go
+
+    fig.add_trace(
+        go.Scatter(
+            x=df_region_plot["Month"],
+            y=df_region_plot["Median_Price"],
+            mode="lines",
+            name="Auckland Region (Historical)",
+            line=dict(dash="dot"),   
+            hovertemplate="Month: %{x|%Y-%m}<br>Auckland Region: %{y:,.0f}<extra></extra>",
+        )
+    )
+
 st.plotly_chart(fig, use_container_width=True)
+
 
 st.caption(
     f"Current anchor (history): {current_anchor_dt.strftime('%Y-%m')}  |  "
@@ -867,24 +978,3 @@ with st.expander("Preview: historical rows (filtered)", expanded=False):
         use_container_width=True,
     )
 
-with st.expander("Debug: paths & shapes", expanded=False):
-    st.write(
-        {
-            "pred_path": str(pred_path),
-            "hist_path": str(hist_path),
-            "shap_path": str(shap_path) if shap_path else None,
-            "pred_shape": pred_all.shape,
-            "hist_shape": hist_all.shape,
-            "shap_shape": shap_all.shape if shap_all is not None else None,
-            "selected": {"district": district, "scenario": scenario, "sel_month": sel_month_str},
-            "forecast_start": forecast_start.strftime("%Y-%m"),
-            "current_anchor": current_anchor_dt.strftime("%Y-%m"),
-            "pred_col": pred_col,
-            "district_dummy_kept": f"cat__District_{_district_to_token(district)}",
-            "spatial_rows": int(spatial_df.shape[0]) if "spatial_df" in locals() else None,
-            "map_zoom": MAP_ZOOM,
-            "map_center": MAP_CENTER,
-            "valid_districts": valid_df["district"].tolist() if "valid_df" in locals() else None, # type: ignore
-            "missing_districts": missing_df["district"].tolist() if "missing_df" in locals() else None, # type: ignore
-        }
-    )

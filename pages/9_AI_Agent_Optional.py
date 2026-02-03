@@ -176,6 +176,34 @@ def _emoji_for_district(name: str) -> str:
 # Compare intent helpers 
 # ============================================================
 
+# Canonical district name mapping (UI / NLP -> CSV keys)
+DISTRICT_CANONICAL_MAP = {
+    "aucklandcity": "AucklandCity",
+    "auckland city": "AucklandCity",
+    "auckland": "AucklandCity",
+
+    "northshore": "NorthShore",
+    "north shore": "NorthShore",
+
+    "waitakere": "Waitakere",
+    "manukau": "Manukau",
+    "papakura": "Papakura",
+    "franklin": "Franklin",
+    "rodney": "Rodney",
+}
+def _normalize_district_for_metrics(name: str) -> str:
+    """
+    Normalize district names from user / NLP layer
+    to canonical names used in metrics_by_district.csv
+    """
+    if not name:
+        return name
+
+    key = name.lower().replace(" ", "").strip()
+    return DISTRICT_CANONICAL_MAP.get(key, name)
+
+
+
 KNOWN_DISTRICTS = [
     "Auckland City",
     "Franklin",
@@ -207,6 +235,51 @@ def _extract_districts_from_text(text: str) -> List[str]:
             seen.add(d)
 
     return out
+
+_MONTH_RE = re.compile(r"\b(20\d{2})-(0[1-9]|1[0-2])\b")
+
+def _extract_month_from_text(text: str) -> Optional[str]:
+    if not text:
+        return None
+    m = _MONTH_RE.search(text)
+    return m.group(0) if m else None
+
+def _is_single_month_explain_query(text: str) -> bool:
+    """
+    Treat as month-specific explanation only if:
+    - contains explain/driver/SHAP-like intent
+    - AND explicitly mentions a month like 2026-06
+    """
+    if not text:
+        return False
+
+    t = text.lower()
+    explain_kw = any(k in t for k in [
+        "explain", "driver", "drivers", "shap", "why", "contribution", "impact", "feature"
+    ])
+    has_month = _extract_month_from_text(text) is not None
+    return bool(explain_kw and has_month)
+
+def _is_compare_query(text: str) -> bool:
+    if not text:
+        return False
+    t = text.lower()
+    return any(k in t for k in ["compare", "vs", "versus"])
+
+
+
+# --- Investment / horizon intent helpers ---
+_INVEST_KWS = [
+    "invest", "investment", "which district should i invest",
+    "best district", "recommend", "portfolio", "risk", "return",
+    "stability", "upside"
+]
+
+def _is_investment_query(text: str) -> bool:
+    if not text:
+        return False
+    t = text.lower()
+    return any(k in t for k in _INVEST_KWS)
 
 
 def _coalesce_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -664,6 +737,127 @@ def _render_district_bullets(df: pd.DataFrame) -> None:
 
         st.markdown(f"- {emj} **{d}**: " + ", ".join(parts))
 
+def _pick_row(df: pd.DataFrame, district: str, key_col: str = "district") -> Optional[Dict[str, Any]]:
+    if df.empty or key_col not in df.columns:
+        return None
+
+    target = str(district).strip()
+    sub = df[df[key_col].astype(str).str.strip() == target]
+    if sub.empty:
+        return None
+
+    return sub.iloc[0].to_dict()
+
+
+def _to_float(x: Any, default: float = float("nan")) -> float:
+    try:
+        if x is None:
+            return default
+        return float(x)
+    except Exception:
+        return default
+
+
+def _build_horizon_compare_markdown(
+    df_metrics: pd.DataFrame,
+    d1: str,
+    d2: str,
+    horizon_start: str,
+    horizon_end: str,
+    scenario: str,
+) -> str:
+    """
+    Build a concise horizon (multi-month) comparison markdown using metrics_by_district.csv
+    (which is already horizon-based: 2025-07 → 2026-06 in your narrative).
+    """
+    if df_metrics.empty:
+        return (
+            f"Could not load horizon metrics table to compare **{d1}** and **{d2}**.\n\n"
+            f"Expected file: `{DEFAULT_INVESTMENT_SOURCE}`"
+        )
+
+    # -------------------------
+    # Normalise district keys (make CSV + user input consistent)
+    # CSV uses e.g. AucklandCity / NorthShore (no spaces)
+    # User input often uses e.g. Auckland City / North Shore
+    # -------------------------
+    df = df_metrics.copy()
+
+    if "district" not in df.columns:
+        return (
+            "Horizon metrics table is missing required column: `district`.\n\n"
+            f"Please check `{DEFAULT_INVESTMENT_SOURCE}`."
+        )
+
+    # Build a normalized lookup key for matching
+    df["district_norm"] = (
+        df["district"].astype(str).str.strip().apply(_normalize_district_for_metrics)
+    )
+
+    d1_norm = _normalize_district_for_metrics(d1)
+    d2_norm = _normalize_district_for_metrics(d2)
+
+    # Pick rows using normalized key
+    r1 = _pick_row(df, d1_norm, key_col="district_norm")
+    r2 = _pick_row(df, d2_norm, key_col="district_norm")
+
+    if r1 is None or r2 is None:
+        missing = []
+        if r1 is None:
+            missing.append(d1)  # show original name to user
+        if r2 is None:
+            missing.append(d2)
+        return (
+            f"Metrics table does not contain: **{', '.join(missing)}**.\n\n"
+            f"Tip: CSV keys look like `{', '.join(sorted(df['district_norm'].unique()))}`.\n\n"
+            f"Please check district names in `{DEFAULT_INVESTMENT_SOURCE}`."
+        )
+
+
+    if r1 is None or r2 is None:
+        missing = []
+        if r1 is None:
+            missing.append(d1)
+        if r2 is None:
+            missing.append(d2)
+        return (
+            f"Metrics table does not contain: **{', '.join(missing)}**.\n\n"
+            f"Please check district names in `{DEFAULT_INVESTMENT_SOURCE}`."
+        )
+
+    # winners (simple)
+    better_return = d1 if float(r1.get("base_return", -1)) > float(r2.get("base_return", -1)) else d2
+    better_stability = d1 if float(r1.get("stability_score", -1)) > float(r2.get("stability_score", -1)) else d2
+    lower_vol = d1 if float(r1.get("volatility", 1e9)) < float(r2.get("volatility", 1e9)) else d2
+    # drawdown: closer to 0 is better (less downside)
+    dd1 = float(r1.get("low_scenario_drawdown", 0.0))
+    dd2 = float(r2.get("low_scenario_drawdown", 0.0))
+    smaller_dd = d1 if abs(dd1) < abs(dd2) else d2
+
+    lines = []
+    lines.append(f"📊 **Horizon comparison ({horizon_start} → {horizon_end}, scenario: {scenario})**")
+    lines.append("")
+    lines.append(f"**{d1}**")
+    lines.append(f"- Base return: {_fmt_pct(r1.get('base_return'))}")
+    lines.append(f"- Volatility: {float(r1.get('volatility', 0.0)):.4f}")
+    lines.append(f"- Low-scenario drawdown: {_fmt_pct(r1.get('low_scenario_drawdown', 0.0))}")
+    lines.append(f"- Scenario spread: {_fmt_money(r1.get('scenario_spread', 0.0))}")
+    lines.append(f"- Stability score: {float(r1.get('stability_score', 0.0)):.2f}")
+    lines.append("")
+    lines.append(f"**{d2}**")
+    lines.append(f"- Base return: {_fmt_pct(r2.get('base_return'))}")
+    lines.append(f"- Volatility: {float(r2.get('volatility', 0.0)):.4f}")
+    lines.append(f"- Low-scenario drawdown: {_fmt_pct(r2.get('low_scenario_drawdown', 0.0))}")
+    lines.append(f"- Scenario spread: {_fmt_money(r2.get('scenario_spread', 0.0))}")
+    lines.append(f"- Stability score: {float(r2.get('stability_score', 0.0)):.2f}")
+    lines.append("")
+    lines.append("**Quick takeaways**")
+    lines.append(f"- Higher expected return: **{better_return}**")
+    lines.append(f"- Higher stability score: **{better_stability}**")
+    lines.append(f"- Lower volatility (risk): **{lower_vol}**")
+    lines.append(f"- Smaller low-scenario drawdown: **{smaller_dd}**")
+
+    return "\n".join(lines)
 
 # ============================================================
 # Agent payload normalization
@@ -893,6 +1087,8 @@ def build_default_context() -> Dict[str, Any]:
         "top_k": 8,
         "tone": st.session_state.get("inv_tone_select", "cautious"),
         "include_profiles": bool(st.session_state.get("inv_profiles_toggle", True)),
+        "horizon_start": "2025-07",
+        "horizon_end": "2026-06",
     }
 
     inv_top_k_val = st.session_state.get("inv_top_k_slider", 3)
@@ -930,31 +1126,105 @@ if user_text:
     ctx = build_default_context()
     picked = _extract_districts_from_text(user_text)
 
+    # ✅ detect intents
+    q_month = _extract_month_from_text(user_text)  # e.g. "2026-06" if mentioned
+    is_single_month_explain = _is_single_month_explain_query(user_text)
+    is_compare = _is_compare_query(user_text) and len(picked) >= 2
+    is_invest = _is_investment_query(user_text) and (len(picked) < 2) and (not is_single_month_explain) and (not is_compare)
+
+
     try:
-        # ✅ If compare-like query with >=2 districts: call forecast_agent per district
-        if len(picked) >= 2:
-            for d in picked:
-                ctx_one = dict(ctx)
-                ctx_one["district"] = d
-                resp_json = post_forecast_agent(
-                    api_base=st.session_state["api_base"],
-                    user_query=user_text,
-                    context=ctx_one,
-                    timeout=int(timeout_s),
-                )
+        if is_single_month_explain:
+            # -------------------------
+            # (A) Month-specific explanation (single month)
+            # -------------------------
+            # override month in ctx using question month
+            if q_month:
+                ctx["month"] = q_month
 
-                # ✅ 手动注入 mode，让前端识别
-                wrapped = {
-                    "mode": "forecast_agent",
-                    "result": resp_json
-                }
+            # choose ONE district to explain:
+            # 1) if user mentioned a district -> use it
+            # 2) else fallback to ctx["district"]
+            if len(picked) >= 1:
+                ctx["district"] = picked[0]
 
-                st.session_state["agent_messages"].append(
-                    {"role": "assistant", "content": "", "raw": wrapped}
-                )
+            resp_json = post_forecast_agent(
+                api_base=st.session_state["api_base"],
+                user_query=user_text,
+                context=ctx,
+                timeout=int(timeout_s),
+            )
+
+            wrapped = {"mode": "forecast_agent", "result": resp_json}
+            st.session_state["agent_messages"].append({"role": "assistant", "content": "", "raw": wrapped})
+
+        elif is_compare:
+            # -------------------------
+            # (B) Horizon-based comparison (2025-07 -> 2026-06)
+            #     FRONTEND-ONLY: use metrics_by_district.csv (multi-month horizon),
+            #     NOT /api/agent and NOT forecast_agent (single-month)
+            # -------------------------
+            horizon_start = ctx.get("horizon_start", "2025-07")
+            horizon_end = ctx.get("horizon_end", "2026-06")
+            scenario = ctx.get("scenario", "base")
+
+            d1_raw, d2_raw = picked[0], picked[1]
+
+            # ✅ normalize -> CSV keys
+            d1 = _normalize_district_for_metrics(d1_raw)
+            d2 = _normalize_district_for_metrics(d2_raw)
+
+
+            # Load horizon metrics (already computed over the full horizon)
+            df_metrics = _extract_investment_metrics(
+                source=DEFAULT_INVESTMENT_SOURCE,
+                meta={},
+                text="",
+            )
+
+            compare_md = _build_horizon_compare_markdown(
+                df_metrics=df_metrics,
+                d1=d1,
+                d2=d2,
+                horizon_start=str(horizon_start),
+                horizon_end=str(horizon_end),
+                scenario=str(scenario),
+            )
+
+            # Show as normal text message (no raw dict -> won't trigger investment renderer)
+            st.session_state["agent_messages"].append(
+                {"role": "assistant", "content": compare_md, "raw": None}
+            )
+
+        elif is_invest:
+            # -------------------------
+            # (C) Investment (full horizon ranking / top-k)
+            # -------------------------
+            # Force the backend to return investment mode using horizon metrics.
+            # (Your backend /api/agent already knows how to produce investment insight.)
+            forced_query = (
+                f"{user_text}\n\n"
+                f"Please answer using the full forecast horizon "
+                f"({ctx.get('horizon_start','2025-07')} to {ctx.get('horizon_end','2026-06')}). "
+                f"Return top districts and explain risk/return/stability."
+            )
+
+            resp_json = post_agent(
+                api_base=st.session_state["api_base"],
+                endpoint_path=endpoint,
+                user_query=forced_query,
+                context=ctx,
+                timeout=int(timeout_s),
+            )
+            st.session_state["agent_messages"].append(
+                {"role": "assistant", "content": "", "raw": resp_json}
+            )
+
 
         else:
-            # default: normal /api/agent
+            # -------------------------
+            # (C) Default: normal /api/agent
+            # -------------------------
             resp_json = post_agent(
                 api_base=st.session_state["api_base"],
                 endpoint_path=endpoint,
@@ -963,24 +1233,6 @@ if user_text:
                 timeout=int(timeout_s),
             )
             st.session_state["agent_messages"].append({"role": "assistant", "content": "", "raw": resp_json})
-
-
-    except requests.HTTPError as e:
-        err_text = ""
-        try:
-            err_text = e.response.text if e.response is not None else str(e)
-        except Exception:
-            err_text = str(e)
-
-        st.session_state["agent_messages"].append(
-            {
-                "role": "assistant",
-                "content": (
-                    f"POST failed: {st.session_state['api_base'].rstrip('/')}{endpoint}\n\n"
-                    f"{type(e).__name__}: {e}\n\n{err_text}"
-                ),
-            }
-        )
     except Exception as e:
         st.session_state["agent_messages"].append(
             {
