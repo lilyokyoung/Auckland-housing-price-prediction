@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import requests
 from fastapi import APIRouter
@@ -101,6 +101,46 @@ def _find_district(text: str) -> Optional[str]:
             return d
 
     return None
+
+def _find_districts(text: str) -> List[str]:
+    """
+    Try to extract multiple districts from a query.
+    Returns a de-duplicated list in appearance order.
+    """
+    t = (text or "").lower()
+    found: List[str] = []
+
+    # (1) exact contains
+    for d in _DISTRICTS:
+        if d.lower() in t and d not in found:
+            found.append(d)
+
+    # (2) loose matching (normalized)
+    if not found:
+        t2 = _norm_key(t)
+        for d in _DISTRICTS:
+            if _norm_key(d) in t2 and d not in found:
+                found.append(d)
+
+    # Special-case: user says "Auckland" (often means Auckland City in your districts list)
+    # Only add Auckland City if no other Auckland-specific district already found.
+    if re.search(r"\bauckland\b", t) and "Auckland City" not in found:
+        found.insert(0, "Auckland City")
+
+    # De-dupe while preserving order
+    out: List[str] = []
+    for d in found:
+        if d not in out:
+            out.append(d)
+    return out
+
+
+def _is_compare_intent(text: str) -> bool:
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+    cues = ["compare", "vs", "versus", "difference", "differences", "between", "which is higher", "which is lower"]
+    return any(c in t for c in cues)
 
 
 def _is_investment_intent(text: str) -> bool:
@@ -212,10 +252,34 @@ def agent_chat(req: AgentRequest) -> AgentResponse:
             },
         )
 
-    # (2) Otherwise -> original forecast_agent routing
-    district = _find_district(q) or _clean_str(ctx.get("district")) or None
-    month = _find_month(q) or _norm_month(ctx.get("month"))
+    # (2) Otherwise -> forecast_agent routing (single or compare)
+    districts = _find_districts(q)
+
+    # context override support
+    ctx_district = ctx.get("district")
+    ctx_districts = ctx.get("districts")
+
+    if not districts:
+        if isinstance(ctx_districts, list):
+            districts = [str(x).strip() for x in ctx_districts if str(x).strip()]
+        elif ctx_district:
+            d = _clean_str(ctx_district)
+            if d:
+                districts = [d]
+
+    compare_intent = _is_compare_intent(q)
+
+    # ✅ month handling:
+    # - if user explicitly writes month in query -> use it
+    # - if compare intent and no explicit month -> horizon (month=None), ignore ctx default month
+    q_month = _find_month(q)
+    if compare_intent and q_month is None:
+        month = None
+    else:
+        month = q_month or _norm_month(ctx.get("month"))
+
     scenario = _norm_scenario(_find_scenario(q) or ctx.get("scenario"))
+
 
     try:
         top_k = int(ctx.get("top_k", 8))
@@ -226,19 +290,130 @@ def agent_chat(req: AgentRequest) -> AgentResponse:
     api_base = _clean_str(ctx.get("api_base") or "http://127.0.0.1:8000").rstrip("/")
     url = f"{api_base}/api/forecast_agent"
 
-    if not district or not month:
+    compare_intent = _is_compare_intent(q)
+
+    # ---- Compare mode: call forecast_agent twice ----
+    if compare_intent and len(districts) >= 2:
+        picked = districts[:2]  # compare first two
+        outputs: Dict[str, Any] = {}
+        errors: Dict[str, Any] = {}
+
+        for d in picked:
+            payload = {"scenario": scenario, "district": d, "top_k": top_k}
+            if month:
+                payload["month"] = month
+
+            try:
+                r = requests.post(url, json=payload, timeout=120)
+                status = r.status_code
+                try:
+                    body = r.json()
+                except Exception:
+                    body = {"raw_text": r.text}
+
+                if status >= 400:
+                    errors[d] = {
+                        "status_code": status,
+                        "request_payload": payload,
+                        "response_body": body,
+                    }
+                else:
+                    outputs[d] = body
+
+            except Exception as e:
+                errors[d] = {
+                    "error": f"{type(e).__name__}: {e}",
+                    "request_payload": payload,
+                }
+
+        if errors:
+            return AgentResponse(
+                ok=False,
+                mode="help",
+                result={
+                    "message": "Compare request failed when calling /api/forecast_agent. Open debug panel to see details.",
+                    "downstream": {"url": url, "errors": errors, "success": list(outputs.keys())},
+                    "received": {"user_query": q, "context": ctx},
+                    "parsed": {"districts": picked, "month": month, "scenario": scenario, "top_k": top_k},
+                    "partial": outputs,
+                },
+            )
+
+        # simple comparison summary using pct_change if present
+        def _pct_from_body(b: Dict[str, Any]) -> Optional[float]:
+            try:
+                val = (b.get("prediction") or {}).get("pct_change")
+                if val is None:
+                    return None
+                if isinstance(val, str):
+                    s = val.strip().replace("%", "").replace("+", "")
+                    if s == "":
+                        return None
+                    return float(s)
+                return float(val)
+            except Exception:
+                return None
+
+        d1, d2 = picked[0], picked[1]
+        p1, p2 = _pct_from_body(outputs[d1]), _pct_from_body(outputs[d2])
+
+        if p1 is not None and p2 is not None:
+            winner = d1 if p1 > p2 else d2
+            loser = d2 if winner == d1 else d1
+
+            win_val = (p1 if winner == d1 else p2)
+            lose_val = (p2 if loser == d2 else p1)
+
+            # ✅ wording depends on sign
+            if win_val < 0 and lose_val < 0:
+                summary = (
+                    f"Comparison ({scenario}): {winner} has a smaller decline "
+                    f"({win_val:+.2f}%) than {loser} ({lose_val:+.2f}%)."
+                )
+            elif win_val > 0 and lose_val > 0:
+                summary = (
+                    f"Comparison ({scenario}): {winner} has a larger increase "
+                    f"({win_val:+.2f}%) than {loser} ({lose_val:+.2f}%)."
+                )
+            else:
+                summary = (
+                    f"Comparison ({scenario}): {winner} performs better "
+                    f"({win_val:+.2f}%) than {loser} ({lose_val:+.2f}%)."
+                )
+        else:
+            summary = f"Comparison ({scenario}): retrieved reports for {d1} and {d2} (pct_change missing in one/both)."
+
+
+        return AgentResponse(
+            ok=True,
+            mode="forecast_compare",
+            result={
+                "summary": summary,
+                "districts": picked,
+                "scenario": scenario,
+                "month": month,  # may be None => horizon
+                "reports": outputs,
+                "received": {"user_query": q, "context": ctx},
+                "parsed": {"districts": picked, "month": month, "scenario": scenario, "top_k": top_k},
+            },
+        )
+
+    # ---- Single mode fallback (call forecast_agent once) ----
+    district = districts[0] if districts else None
+
+    if not district:
         return AgentResponse(
             ok=True,
             mode="help",
             result={
                 "message": (
-                    "Please provide district and month, e.g. "
-                    "'Explain North Shore forecast 2026-06', "
-                    "or ask an investment-style question such as "
-                    "'Which district is safer to invest in?'."
+                    "Please provide a district, e.g. 'Explain North Shore forecast', "
+                    "or ask 'Compare North Shore and Manukau'. "
+                    "Month is optional now (if omitted, the agent summarises the full forecast horizon)."
                 ),
                 "accepted_context_keys": [
                     "district",
+                    "districts",
                     "month",
                     "scenario",
                     "top_k",
@@ -247,16 +422,13 @@ def agent_chat(req: AgentRequest) -> AgentResponse:
                     "include_profiles",
                 ],
                 "received": {"user_query": q, "context": ctx},
-                "parsed": {
-                    "district": district,
-                    "month": month,
-                    "scenario": scenario,
-                    "top_k": top_k,
-                },
+                "parsed": {"district": district, "month": month, "scenario": scenario, "top_k": top_k},
             },
         )
 
-    payload = {"scenario": scenario, "district": district, "month": month, "top_k": top_k}
+    payload = {"scenario": scenario, "district": district, "top_k": top_k}
+    if month:
+        payload["month"] = month
 
     try:
         r = requests.post(url, json=payload, timeout=120)

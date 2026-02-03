@@ -149,10 +149,17 @@ def _fmt_pct(x: Any) -> str:
     try:
         if x is None:
             return "—"
-        v = float(x) * 100.0
-        return f"{v:.2f}%"
+        v = float(x)
+
+        # ✅ If backend already sends percent (e.g., -6.53), don't multiply again
+        if abs(v) > 1.0:
+            return f"{v:.2f}%"
+
+        # ✅ Otherwise treat as ratio (e.g., -0.0653)
+        return f"{v * 100.0:.2f}%"
     except Exception:
         return "—"
+
 
 
 def _emoji_for_district(name: str) -> str:
@@ -901,6 +908,21 @@ def _extract_agent_payload(agent_resp: Dict[str, Any]) -> Dict[str, Any]:
             "raw": agent_resp,
         }
 
+    if mode == "forecast_compare":
+        summary = (result.get("summary") or "").strip()
+        reports = result.get("reports", {}) if isinstance(result.get("reports"), dict) else {}
+        districts = result.get("districts", []) if isinstance(result.get("districts"), list) else []
+
+        return {
+            "mode": "forecast_compare",
+            "summary": summary,
+            "districts": districts,
+            "reports": reports,
+            "raw": agent_resp,
+        }
+    # duplicate forecast_compare UI block removed (handled in render_agent_response)
+
+
     if mode == "forecast_agent":
         narrative = ""
         prediction: Dict[str, Any] = {}
@@ -987,6 +1009,133 @@ def render_agent_response(agent_resp: Dict[str, Any], show_debug_panels: bool) -
                 st.write("default.source:", DEFAULT_INVESTMENT_SOURCE)
 
         return
+
+    if mode == "forecast_compare":
+        summary = (norm.get("summary") or "").strip()
+        districts = norm.get("districts", []) or []
+        reports = norm.get("reports", {}) or {}
+
+        # --- Header summary ---
+        if summary:
+            st.success(summary)
+        else:
+            st.info("Comparison result returned (no summary).")
+
+        # Safety
+        districts_str = [str(d).strip() for d in districts if str(d).strip()]
+        if len(districts_str) < 2:
+            st.caption("Need at least 2 districts for comparison.")
+            if show_debug_panels:
+                with st.expander("Debug (compare payload)", expanded=False):
+                    st.json(norm.get("raw", agent_resp))
+            return
+
+        d1, d2 = districts_str[0], districts_str[1]
+
+        def _get_report(d: str) -> Dict[str, Any]:
+            rep = reports.get(d)
+            if isinstance(rep, dict):
+                return rep
+            # loose match
+            for k, v in (reports.items() if isinstance(reports, dict) else []):
+                if str(k).strip().lower() == d.strip().lower() and isinstance(v, dict):
+                    return v
+            return {}
+
+        def _extract_core(rep: Dict[str, Any]) -> Dict[str, Any]:
+            pred = rep.get("prediction") if isinstance(rep.get("prediction"), dict) else {}
+            shap = rep.get("shap") if isinstance(rep.get("shap"), dict) else {}
+            drivers = shap.get("drivers") if isinstance(shap.get("drivers"), dict) else {"up": [], "down": []} # type: ignore
+            return {
+                "current": pred.get("current_price"), # type: ignore
+                "future": pred.get("future_price"), # type: ignore
+                "pct": pred.get("pct_change"), # type: ignore
+                "drivers_up": drivers.get("up", []) if isinstance(drivers.get("up"), list) else [], # type: ignore
+                "drivers_down": drivers.get("down", []) if isinstance(drivers.get("down"), list) else [], # type: ignore
+            }
+
+        r1 = _extract_core(_get_report(d1))
+        r2 = _extract_core(_get_report(d2))
+
+        # --- Two-column comparison cards ---
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.markdown(f"### {d1}")
+            m1, m2, m3 = st.columns(3)
+            with m1:
+                st.metric("Current", _fmt_money(r1["current"]))
+            with m2:
+                st.metric("Future", _fmt_money(r1["future"]))
+            with m3:
+                st.metric("Change", _fmt_pct(r1["pct"]))
+
+            with st.expander("Key drivers", expanded=False):
+                up = r1["drivers_up"][:5]
+                down = r1["drivers_down"][:5]
+
+                st.markdown("**Upward**")
+                if up:
+                    for x in up:
+                        st.write(f"✅ {x.get('feature','—')}" if isinstance(x, dict) else f"✅ {x}")
+                else:
+                    st.write("—")
+
+                st.markdown("**Downward**")
+                if down:
+                    for x in down:
+                        st.write(f"⚠️ {x.get('feature','—')}" if isinstance(x, dict) else f"⚠️ {x}")
+                else:
+                    st.write("—")
+
+        with c2:
+            st.markdown(f"### {d2}")
+            m1, m2, m3 = st.columns(3)
+            with m1:
+                st.metric("Current", _fmt_money(r2["current"]))
+            with m2:
+                st.metric("Future", _fmt_money(r2["future"]))
+            with m3:
+                st.metric("Change", _fmt_pct(r2["pct"]))
+
+            with st.expander("Key drivers", expanded=False):
+                up = r2["drivers_up"][:5]
+                down = r2["drivers_down"][:5]
+
+                st.markdown("**Upward**")
+                if up:
+                    for x in up:
+                        st.write(f"✅ {x.get('feature','—')}" if isinstance(x, dict) else f"✅ {x}")
+                else:
+                    st.write("—")
+
+                st.markdown("**Downward**")
+                if down:
+                    for x in down:
+                        st.write(f"⚠️ {x.get('feature','—')}" if isinstance(x, dict) else f"⚠️ {x}")
+                else:
+                    st.write("—")
+
+        # --- Optional: tiny comparison row table ---
+        st.markdown("### Quick comparison")
+        comp_df = pd.DataFrame(
+            [
+                {"District": d1, "Current": _fmt_money(r1["current"]), "Future": _fmt_money(r1["future"]), "Change": _fmt_pct(r1["pct"])},
+                {"District": d2, "Current": _fmt_money(r2["current"]), "Future": _fmt_money(r2["future"]), "Change": _fmt_pct(r2["pct"])},
+            ]
+        )
+        st.dataframe(comp_df, use_container_width=True, hide_index=True)
+        st.info(
+            "'Current' = Median house price in June 2025 (last historical month). "
+            "'Future' = Predicted median house price in June 2026 (last forecast month)."
+        )
+
+        if show_debug_panels:
+            with st.expander("Debug (compare payload)", expanded=False):
+                st.json(norm.get("raw", agent_resp))
+        return
+
+
 
     if mode == "forecast_agent":
         narrative = (norm.get("narrative") or "").strip()
@@ -1083,7 +1232,7 @@ def build_default_context() -> Dict[str, Any]:
     ctx = {
         "district": st.session_state.get("district", "Auckland City"),
         "scenario": st.session_state.get("pred_scenario", "base"),
-        "month": st.session_state.get("explain_month", "2026-06"),
+        "month": None,
         "top_k": 8,
         "tone": st.session_state.get("inv_tone_select", "cautious"),
         "include_profiles": bool(st.session_state.get("inv_profiles_toggle", True)),
@@ -1131,7 +1280,10 @@ if user_text:
     is_single_month_explain = _is_single_month_explain_query(user_text)
     is_compare = _is_compare_query(user_text) and len(picked) >= 2
     is_invest = _is_investment_query(user_text) and (len(picked) < 2) and (not is_single_month_explain) and (not is_compare)
-
+    if is_compare and not q_month:
+        ctx["month"] = None
+    elif q_month:
+        ctx["month"] = q_month
 
     try:
         if is_single_month_explain:
@@ -1160,48 +1312,43 @@ if user_text:
 
         elif is_compare:
             # -------------------------
-            # (B) Horizon-based comparison (2025-07 -> 2026-06)
-            #     FRONTEND-ONLY: use metrics_by_district.csv (multi-month horizon),
-            #     NOT /api/agent and NOT forecast_agent (single-month)
+            # (B) Compare (backend, Plan A)
+            #     Let /api/agent call /api/forecast_agent twice and merge into one compare result.
+            #     Month is OPTIONAL:
+            #       - if user explicitly mentions YYYY-MM -> month-specific compare
+            #       - otherwise -> horizon compare (backend forecast_agent month=None)
             # -------------------------
-            horizon_start = ctx.get("horizon_start", "2025-07")
-            horizon_end = ctx.get("horizon_end", "2026-06")
-            scenario = ctx.get("scenario", "base")
+            # Ensure month only sent when user explicitly asked a month
+            if q_month:
+                ctx["month"] = q_month
+            else:
+                # IMPORTANT: do not force default month (e.g., 2026-06) into compare
+                ctx.pop("month", None)
 
-            d1_raw, d2_raw = picked[0], picked[1]
+            # Pass both districts for backend compare
+            ctx["districts"] = picked[:2]
+            # Keep a single district for backward compatibility (some older logic may read ctx["district"])
+            ctx["district"] = picked[0]
 
-            # ✅ normalize -> CSV keys
-            d1 = _normalize_district_for_metrics(d1_raw)
-            d2 = _normalize_district_for_metrics(d2_raw)
-
-
-            # Load horizon metrics (already computed over the full horizon)
-            df_metrics = _extract_investment_metrics(
-                source=DEFAULT_INVESTMENT_SOURCE,
-                meta={},
-                text="",
+            resp_json = post_agent(
+                api_base=st.session_state["api_base"],
+                endpoint_path=endpoint,   # should be "/api/agent" in normal demo mode
+                user_query=user_text,
+                context=ctx,
+                timeout=int(timeout_s),
             )
 
-            compare_md = _build_horizon_compare_markdown(
-                df_metrics=df_metrics,
-                d1=d1,
-                d2=d2,
-                horizon_start=str(horizon_start),
-                horizon_end=str(horizon_end),
-                scenario=str(scenario),
-            )
-
-            # Show as normal text message (no raw dict -> won't trigger investment renderer)
             st.session_state["agent_messages"].append(
-                {"role": "assistant", "content": compare_md, "raw": None}
+                {"role": "assistant", "content": "", "raw": resp_json}
             )
 
         elif is_invest:
             # -------------------------
             # (C) Investment (full horizon ranking / top-k)
             # -------------------------
-            # Force the backend to return investment mode using horizon metrics.
-            # (Your backend /api/agent already knows how to produce investment insight.)
+            # You can keep this forced_query approach, but make sure month is NOT forced.
+            ctx.pop("month", None)
+
             forced_query = (
                 f"{user_text}\n\n"
                 f"Please answer using the full forecast horizon "
@@ -1216,9 +1363,11 @@ if user_text:
                 context=ctx,
                 timeout=int(timeout_s),
             )
+
             st.session_state["agent_messages"].append(
                 {"role": "assistant", "content": "", "raw": resp_json}
             )
+
 
 
         else:

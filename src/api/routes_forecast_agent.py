@@ -30,7 +30,7 @@ SHAP_DIR = OUTPUT_DIR / "shap_forecast"
 class ForecastAgentRequest(BaseModel):
     scenario: str = Field(..., description="base|low|high")
     district: str = Field(..., description="One of the 7 Auckland districts")
-    month: str = Field(..., description="YYYY-MM")
+    month: Optional[str] = Field(None, description="YYYY-MM (optional). If omitted, summarise full forecast horizon.")
     top_k: int = Field(8, ge=1, le=50)
 
 
@@ -334,6 +334,65 @@ def _get_current_price_before_forecast(
     dbg["anchor_rule"] = "fallback_last_history_value"
     return current, dbg
 
+def _get_future_price_horizon(
+    preds: pd.DataFrame,
+    district_key: str,
+    scenario: str,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """
+    Return the full forecast path for (district, scenario), sorted by month.
+    """
+    dbg: Dict[str, Any] = {}
+    sub = preds[(preds["_district_key"] == district_key) & (preds["_scenario"] == scenario)].copy()
+    dbg["rows"] = int(len(sub))
+    if sub.empty:
+        return pd.DataFrame(), dbg
+
+    sub["_month_dt"] = pd.to_datetime(sub["_month"].astype(str) + "-01", errors="coerce")
+    sub = sub.dropna(subset=["_month_dt"]).sort_values("_month_dt")
+    return sub[["_month", "_pred"]].rename(columns={"_month": "month", "_pred": "pred"}), dbg
+
+
+def _get_shap_drivers_horizon(
+    shap_df: pd.DataFrame,
+    district_key: str,
+    scenario: str,
+    top_k: int,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Aggregate SHAP across all forecast months for (district, scenario).
+    Use mean_abs_shap as main importance, mean_shap for direction.
+    """
+    dbg: Dict[str, Any] = {}
+    sub = shap_df[
+        (shap_df["_district_key"] == district_key)
+        & (shap_df["_scenario"] == scenario)
+    ].copy()
+
+    dbg["rows"] = int(len(sub))
+    if sub.empty:
+        return {"drivers": {"up": [], "down": [], "all": []}}, dbg
+
+    g = (
+        sub.groupby("_feature")["_shap"]
+        .agg(mean_shap="mean", mean_abs_shap=lambda x: float(np.mean(np.abs(x))))
+        .reset_index()
+        .sort_values("mean_abs_shap", ascending=False)
+        .reset_index(drop=True)
+    )
+
+    up_df = g[g["mean_shap"] > 0].head(top_k)
+    down_df = g[g["mean_shap"] < 0].sort_values("mean_shap", ascending=True).head(top_k)
+
+    up = [{"feature": r["_feature"], "mean_shap": float(r["mean_shap"]), "mean_abs_shap": float(r["mean_abs_shap"])}
+          for _, r in up_df.iterrows()]
+    down = [{"feature": r["_feature"], "mean_shap": float(r["mean_shap"]), "mean_abs_shap": float(r["mean_abs_shap"])}
+            for _, r in down_df.iterrows()]
+    all_list = [{"feature": r["_feature"], "mean_shap": float(r["mean_shap"]), "mean_abs_shap": float(r["mean_abs_shap"])}
+                for _, r in g.iterrows()]
+
+    return {"drivers": {"up": up, "down": down, "all": all_list}}, dbg
+
 
 def _get_future_price(
     preds: pd.DataFrame,
@@ -415,12 +474,11 @@ def forecast_agent(req: ForecastAgentRequest) -> ForecastAgentResponse:
     Then uses SimpleForecastAgent to generate narrative & structured agent output.
     """
     scenario = _norm_scenario(req.scenario)
-    month = _to_month_str(req.month)
+    month = _to_month_str(req.month)  # month is now optional
+    # ensure a month_label variable is always defined (used below when month is omitted)
+    month_label: str = month or ""
     district_raw = _clean_str(req.district)
     top_k = int(req.top_k)
-
-    if not month:
-        raise HTTPException(status_code=422, detail="Invalid month. Expect 'YYYY-MM'.")
 
     district_key = _norm_key(district_raw)
 
@@ -429,7 +487,7 @@ def forecast_agent(req: ForecastAgentRequest) -> ForecastAgentResponse:
             "scenario": scenario,
             "district": district_raw,
             "district_key": district_key,
-            "month": month,
+            "month": month,   # may be None
             "top_k": top_k,
         }
     }
@@ -480,12 +538,56 @@ def forecast_agent(req: ForecastAgentRequest) -> ForecastAgentResponse:
             )
 
         current_price, cur_dbg = _get_current_price_before_forecast(hist, district_key, forecast_start_month)
-        future_price, fut_dbg = _get_future_price(preds, district_key, month, scenario)
-        shap_pack, shap_slice_dbg = _get_shap_drivers(shap_df, district_key, month, scenario, top_k)
-
         debug["current_price_debug"] = cur_dbg
-        debug["future_price_debug"] = fut_dbg
-        debug["shap_slice_debug"] = shap_slice_dbg
+
+        # -----------------------------
+        # Mode switch:
+        #   - if month provided => single-month explanation (original behavior)
+        #   - if month omitted  => full-horizon explanation (NEW)
+        # -----------------------------
+        if month:
+            debug["mode"] = "single_month"
+
+            future_price, fut_dbg = _get_future_price(preds, district_key, month, scenario)
+            shap_pack, shap_slice_dbg = _get_shap_drivers(shap_df, district_key, month, scenario, top_k)
+
+            debug["future_price_debug"] = fut_dbg
+            debug["shap_slice_debug"] = shap_slice_dbg
+
+        else:
+            debug["mode"] = "horizon"
+
+            path_df, path_dbg = _get_future_price_horizon(preds, district_key, scenario)
+            shap_pack, shap_slice_dbg = _get_shap_drivers_horizon(shap_df, district_key, scenario, top_k)
+
+            debug["horizon_path_debug"] = path_dbg
+            debug["shap_horizon_debug"] = shap_slice_dbg
+
+            if path_df.empty:
+                raise HTTPException(status_code=422, detail="No forecast rows found for this district+scenario.")
+
+            horizon_start = str(path_df["month"].iloc[0])
+            horizon_end = str(path_df["month"].iloc[-1])
+
+            # ✅ Use end-of-horizon as future_price (that’s fine)
+            future_price = float(path_df["pred"].iloc[-1])
+
+            # ✅ IMPORTANT: do NOT pretend month is a single month
+            # Use a label so the narrative clearly says it's the whole horizon
+            month_label = f"{horizon_start}→{horizon_end}"
+
+            debug["horizon_summary"] = {
+                "start_month": horizon_start,
+                "end_month": horizon_end,
+                "start_price": float(path_df["pred"].iloc[0]),
+                "end_price": float(path_df["pred"].iloc[-1]),
+            }
+
+            # keep a compatible fut_dbg shape
+            debug["future_price_debug"] = {"pred_rows_for_horizon": int(len(path_df))}
+            debug["shap_slice_debug"] = shap_slice_dbg
+
+
 
         # pct_change in percent (align with Streamlit UI)
         pct_change_pct: Optional[float] = None
@@ -496,7 +598,7 @@ def forecast_agent(req: ForecastAgentRequest) -> ForecastAgentResponse:
         agent_out = agent.run(
             district=district_raw,
             scenario=scenario,
-            month=month,
+            month=str(month if month is not None else month_label),
             current_price=current_price,
             future_price=future_price,
             pct_change=pct_change_pct,  # percent
@@ -517,7 +619,9 @@ def forecast_agent(req: ForecastAgentRequest) -> ForecastAgentResponse:
             prediction={
                 "scenario": scenario,
                 "district": district_raw,
-                "month": month,
+                "month": (month if month else None),
+                "horizon_start": debug.get("horizon_summary", {}).get("start_month"),
+                "horizon_end": debug.get("horizon_summary", {}).get("end_month"),
                 "forecast_start_month": forecast_start_month,
                 "current_month": cur_dbg.get("current_month"),
                 "current_price": current_price,
