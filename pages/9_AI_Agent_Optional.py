@@ -50,6 +50,9 @@ if "agent_messages" not in st.session_state:
 # ============================================================
 # Sidebar controls
 # ============================================================
+st.caption(f"API_BASE (env): {os.getenv('API_BASE')}")
+st.caption(f"API_BASE (session): {st.session_state.get('api_base')}")
+
 with st.sidebar:
     # =========================
     # (A) Demo controls (keep)
