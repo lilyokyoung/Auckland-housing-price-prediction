@@ -1,6 +1,6 @@
-# 🏠 Auckland Housing Price Prediction
+🏠 Auckland Housing Price Prediction
 
-An AI-driven application for property valuation across seven Auckland districts: **Auckland City, Franklin, Manukau, North Shore, Papakura, Rodney, and Waitakere**.
+An AI-driven application for property valuation across seven Auckland districts: Auckland City, Franklin, Manukau, North Shore, Papakura, Rodney, and Waitakere.
 🔗 Streamlit Demo: auckland-housing-prediction-avm.streamlit.app
 
 ## 📌 Project Overview
