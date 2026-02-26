@@ -118,23 +118,13 @@ uvicorn src.api.main:app --reload
 
 ```bash
 # 1. Login to Azure
-az login
 
 # 2. Login to Azure Container Registry
-az acr login --name <your-acr-name>
 
 # 3. Build Docker images
-docker build -f Dockerfile.api -t <your-acr-name>.azurecr.io/housing-api .
-docker build -f Dockerfile.ui -t <your-acr-name>.azurecr.io/housing-ui .
 
 # 4. Push images to ACR
-docker push <your-acr-name>.azurecr.io/housing-api
-docker push <your-acr-name>.azurecr.io/housing-ui
 
 # 5. Deploy to Azure Container Apps
-az containerapp create --name <your-app-name> \
-  --resource-group <your-resource-group> \
-  --image <your-acr-name>.azurecr.io/housing-api \
-  --target-port 8000 \
-  --ingress external
+
 ```
