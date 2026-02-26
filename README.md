@@ -1,14 +1,7 @@
 # 🏠 Auckland Housing Price Prediction
 
 An AI-driven application for property valuation across seven Auckland districts: **Auckland City, Franklin, Manukau, North Shore, Papakura, Rodney, and Waitakere**.
-
-🔗 **Streamlit Demo:** [auckland-housing-prediction-avm.streamlit.app](https://auckland-housing-prediction-avm.streamlit.app)
-
-🔗 **Azure API Docs:** [avm-api.delightfulstone-2a01eb1e.australiaeast.azurecontainerapps.io/docs](https://avm-api.delightfulstone-2a01eb1e.australiaeast.azurecontainerapps.io/docs)
-
-🔗 **GitHub Repo:** [github.com/lilyokyoung/Auckland-housing-price-prediction](https://github.com/lilyokyoung/Auckland-housing-price-prediction)
-
----
+🔗 Streamlit Demo: auckland-housing-prediction-avm.streamlit.app
 
 ## 📌 Project Overview
 
