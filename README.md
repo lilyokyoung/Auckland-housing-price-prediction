@@ -68,6 +68,7 @@ The project is structured into five layers:
 | Auckland City | Most stable — suitable for conservative strategies |
 | Rodney | High potential return, high risk |
 | Manukau & Waitakere | Balanced risk–return profiles |
+| North Shore | Relatively stable, moderate risk with modest return potential |
 | Papakura & Franklin | Weaker performance under forecast horizon |
 
 ---
