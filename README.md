@@ -22,7 +22,7 @@ The project is structured into five layers:
 ### 🔹 1. Data Engineering
 - **Target variable:** Monthly median housing price across 7 Auckland districts
 - **Explanatory variables:**
-  - *Macroeconomic:* OCR, mortgage interest rates, CGPI for dwelling units, unemployment rate
+  - *Macroeconomic:* OCR, mortgage interest rates, CPI, CGPI for dwelling units, unemployment rate
   - *Demographic:* Net migration
   - *Housing market dynamics:* Sales counts, building consents, average weekly rent
 - Dataset spans **August 2018 – June 2025** (monthly frequency)
